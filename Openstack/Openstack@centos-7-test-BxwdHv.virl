@@ -1,0 +1,616 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<topology xmlns="http://www.cisco.com/VIRL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" schemaVersion="0.8" xsi:schemaLocation="http://www.cisco.com/VIRL https://raw.github.com/CiscoVIRL/schema/v0.8/virl.xsd">
+    <extensions>
+        <entry key="management_network" type="String">flat</entry>
+    </extensions>
+    <node name="controller" type="SIMPLE" subtype="server" location="88,74" vmImage="server-centos" vmFlavor="m1.medium">
+        <extensions>
+            <entry key="config" type="String">#cloud-config
+hostname: controller
+fqdn: controller.onm.ciscosystems.com.
+manage_etc_hosts: false
+package_upgrade: true
+
+runcmd:
+- ifconfig eth1 10.0.0.11 netmask 255.255.255.0 up
+- systemctl stop firewalld
+- systemctl disable firewalld 
+- setsebool -P nis_enabled 1
+- echo 10.0.0.21 network &gt; /etc/hosts
+- echo 10.0.0.11 controller &gt;&gt; /etc/hosts
+- echo 10.0.0.31 compute1 &gt;&gt; /etc/hosts
+- dhclient -r eth0
+- dhclient
+- yum install -y http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
+- yum install -y http://rdo.fedorapeople.org/openstack-juno/rdo-release-juno.rpm
+- systemctl disable chronyd.service
+- systemctl enable ntpd.service
+- systemctl start ntpd.service
+- systemctl enable mariadb.service
+- systemctl start mariadb.service
+- systemctl enable rabbitmq-server.service
+- systemctl start rabbitmq-server.service
+- rabbitmqctl change_password guest rabbit_Cisco123
+
+packages:
+ - ntp
+ - yum-plugin-priorities
+ - mariadb 
+ - mariadb-server 
+ - MySQL-python
+ - rabbitmq-server
+
+write_files:
+- path: /etc/systemd/system/dhclient@.service
+  content: |
+    [Unit]
+    Description=Run dhclient on %i interface
+    After=network.target
+    [Service]
+    Type=oneshot
+    ExecStart=/sbin/dhclient %i -pf /var/run/dhclient.%i.pid -lf /var/lib/dhclient/dhclient.%i.lease
+    RemainAfterExit=yes
+  owner: root:root
+  permissions: '0644'
+- path: /etc/ntp.conf
+  content: |
+    driftfile /var/lib/ntp/drift
+    restrict default nomodify notrap nopeer noquery
+    restrict 127.0.0.1
+    restrict ::1
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    includefile /etc/ntp/crypto/pw
+    keys /etc/ntp/keys
+    disable monitor
+  owner: root:root
+  permissions: '0644'
+- path: /etc/yum.conf
+  content: |
+    [main]
+    cachedir=/var/cache/yum/$basearch/$releasever
+    keepcache=0
+    debuglevel=2
+    logfile=/var/log/yum.log
+    exactarch=1
+    obsoletes=1
+    gpgcheck=1
+    plugins=1
+    installonly_limit=5
+    bugtracker_url=http://bugs.centos.org/set_project.php?project_id=23&amp;ref=http://bugs.centos.org/bug_report_page.php?category=yum
+    distroverpkg=centos-release
+    proxy=http://proxy-ams-1.cisco.com:8080
+  owner: root:root
+  permissions: '0644'
+- path: /etc/my.cnf
+  content: |
+    [mysqld]
+    datadir=/var/lib/mysql
+    socket=/var/lib/mysql/mysql.sock
+    symbolic-links=0
+    bind-address = 10.0.0.11
+    default-storage-engine = innodb
+    innodb_file_per_table
+    collation-server = utf8_general_ci
+    init-connect = 'SET NAMES utf8'
+    character-set-server = utf8
+    [mysqld_safe]
+    log-error=/var/log/mariadb/mariadb.log
+    pid-file=/var/run/mariadb/mariadb.pid    
+    !includedir /etc/my.cnf.d
+  owner: root:root
+  permissions: '0644'
+- path: /etc/sysconfig/network-scripts/ifcfg-eth1
+  content: |
+    DEVICE=&quot;eth1&quot;
+    NM_CONTROLLED=&quot;no&quot;
+    ONBOOT=&quot;yes&quot;
+    BOOTPROTO=static
+    IPADDR=10.0.0.11
+    NETMASK=255.255.255.0
+  owner: root:root
+  permissions: '0644'</entry>
+        </extensions>
+        <interface id="0" name="eth1"/>
+    </node>
+    <node name="switch" type="SIMPLE" subtype="IOSv" location="290,162" vmImage="IOSvL2-switch">
+        <extensions>
+            <entry key="config" type="String">!
+! Last configuration change at 08:03:32 UTC Thu Feb 19 2015
+!
+version 15.2
+service timestamps debug datetime msec
+service timestamps log datetime msec
+no service password-encryption
+service compress-config
+!
+hostname ios-switch
+!
+boot-start-marker
+boot-end-marker
+!
+!
+!
+no aaa new-model
+!
+!
+!
+!
+!
+!
+!
+!
+ip cef
+no ipv6 cef
+!
+!
+spanning-tree mode pvst
+spanning-tree extend system-id
+!
+vlan internal allocation policy ascending
+!
+! 
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+interface GigabitEthernet0/0
+ ip dhcp client hostname l2-switch-openstack
+ media-type rj45
+ negotiation auto
+!
+interface GigabitEthernet0/1
+ switchport access vlan 100
+ media-type rj45
+ negotiation auto
+!
+interface GigabitEthernet0/2
+ switchport access vlan 100
+ media-type rj45
+ negotiation auto
+!
+interface GigabitEthernet0/3
+ switchport access vlan 200
+ media-type rj45
+ negotiation auto
+!
+interface GigabitEthernet1/0
+ switchport access vlan 400
+ shutdown
+ media-type rj45
+ negotiation auto
+!
+interface GigabitEthernet1/1
+ switchport access vlan 100
+ media-type rj45
+ negotiation auto
+!
+interface GigabitEthernet1/2
+ switchport access vlan 200
+ media-type rj45
+ negotiation auto
+!
+interface GigabitEthernet1/3
+ switchport access vlan 300
+ media-type rj45
+ negotiation auto
+!
+interface GigabitEthernet2/0
+ media-type rj45
+ negotiation auto
+!
+interface Vlan1
+ ip dhcp client hostname l2-switch-openstack
+ no ip address
+ shutdown
+!
+interface Vlan100
+ ip address 10.0.0.1 255.255.255.0
+!
+interface Vlan200
+ ip address 10.0.1.1 255.255.255.0
+!
+ip forward-protocol nd
+!
+no ip http server
+no ip http secure-server
+!
+!
+!
+!
+!
+!
+control-plane
+!
+banner exec `CC
+**************************************************************************
+* IOSv - Cisco Systems Confidential                                      *
+*                                                                        *
+* This software is provided as is without warranty for internal          *
+* development and testing purposes only under the terms of the Cisco     *
+* Early Field Trial agreement.  Under no circumstances may this software *
+* be used for production purposes or deployed in a production            *
+* environment.                                                           *
+*                                                                        *
+* By using the software, you agree to abide by the terms and conditions  *
+* of the Cisco Early Field Trial Agreement as well as the terms and      *
+* conditions of the Cisco End User License Agreement at                  *
+* http://www.cisco.com/go/eula                                           *
+*                                                                        *
+* Unauthorized use or distribution of this software is expressly         *
+* Prohibited.                                                            *
+**************************************************************************`
+banner incoming `CC
+**************************************************************************
+* IOSv - Cisco Systems Confidential                                      *
+*                                                                        *
+* This software is provided as is without warranty for internal          *
+* development and testing purposes only under the terms of the Cisco     *
+* Early Field Trial agreement.  Under no circumstances may this software *
+* be used for production purposes or deployed in a production            *
+* environment.                                                           *
+*                                                                        *
+* By using the software, you agree to abide by the terms and conditions  *
+* of the Cisco Early Field Trial Agreement as well as the terms and      *
+* conditions of the Cisco End User License Agreement at                  *
+* http://www.cisco.com/go/eula                                           *
+*                                                                        *
+* Unauthorized use or distribution of this software is expressly         *
+* Prohibited.                                                            *
+**************************************************************************`
+banner login `CC
+**************************************************************************
+* IOSv - Cisco Systems Confidential                                      *
+*                                                                        *
+* This software is provided as is without warranty for internal          *
+* development and testing purposes only under the terms of the Cisco     *
+* Early Field Trial agreement.  Under no circumstances may this software *
+* be used for production purposes or deployed in a production            *
+* environment.                                                           *
+*                                                                        *
+* By using the software, you agree to abide by the terms and conditions  *
+* of the Cisco Early Field Trial Agreement as well as the terms and      *
+* conditions of the Cisco End User License Agreement at                  *
+* http://www.cisco.com/go/eula                                           *
+*                                                                        *
+* Unauthorized use or distribution of this software is expressly         *
+* Prohibited.                                                            *
+**************************************************************************`
+!
+line con 0
+line aux 0
+line vty 0 4
+ login
+!
+!
+end</entry>
+        </extensions>
+        <interface id="0" name="GigabitEthernet0/1"/>
+        <interface id="1" name="GigabitEthernet0/2"/>
+        <interface id="2" name="GigabitEthernet0/3"/>
+        <interface id="3" name="GigabitEthernet0/4"/>
+        <interface id="4" name="GigabitEthernet0/5"/>
+        <interface id="5" name="GigabitEthernet0/6"/>
+        <interface id="6" name="GigabitEthernet0/7"/>
+        <interface id="7" name="GigabitEthernet0/8"/>
+    </node>
+    <node name="network" type="SIMPLE" subtype="server" location="259,48" vmImage="server-centos">
+        <extensions>
+            <entry key="config" type="String">#cloud-config
+hostname: network
+fqdn: network.onm.ciscosystems.com.
+manage_etc_hosts: false
+package_upgrade: true
+
+runcmd:
+- ifconfig eth1 10.0.0.21 netmask 255.255.255.0 up
+- ifconfig eth2 10.0.1.21 netmask 255.255.255.0 up
+- systemctl stop firewalld
+- systemctl disable firewalld 
+- echo 10.0.0.21 network &gt; /etc/hosts
+- echo 10.0.0.11 controller &gt;&gt; /etc/hosts
+- echo 10.0.0.31 compute1 &gt;&gt; /etc/hosts
+- dhclient -r eth0
+- dhclient
+- yum install -y http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
+- yum install -y http://rdo.fedorapeople.org/openstack-juno/rdo-release-juno.rpm
+- systemctl disable chronyd.service
+- systemctl enable ntpd.service
+- systemctl start ntpd.service
+
+packages:
+ - ntp
+ - yum-plugin-priorities
+
+
+write_files:
+- path: /etc/systemd/system/dhclient@.service
+  content: |
+    [Unit]
+    Description=Run dhclient on %i interface
+    After=network.target
+    [Service]
+    Type=oneshot
+    ExecStart=/sbin/dhclient %i -pf /var/run/dhclient.%i.pid -lf /var/lib/dhclient/dhclient.%i.lease
+    RemainAfterExit=yes
+  owner: root:root
+  permissions: '0644'
+- path: /etc/sysconfig/network-scripts/ifcfg-eth3
+  content: |
+    DEVICE=INTERFACE_NAME
+    TYPE=Ethernet
+    ONBOOT=&quot;yes&quot;
+    BOOTPROTO=&quot;none&quot;
+  owner: root:root
+  permissions: '0644'
+- path: /etc/ntp.conf
+  content: |
+    driftfile /var/lib/ntp/drift
+    restrict default nomodify notrap nopeer noquery
+    restrict 127.0.0.1
+    restrict ::1
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    includefile /etc/ntp/crypto/pw
+    keys /etc/ntp/keys
+    disable monitor
+  owner: root:root
+  permissions: '0644'
+- path: /etc/yum.conf
+  content: |
+    [main]
+    cachedir=/var/cache/yum/$basearch/$releasever
+    keepcache=0
+    debuglevel=2
+    logfile=/var/log/yum.log
+    exactarch=1
+    obsoletes=1
+    gpgcheck=1
+    plugins=1
+    installonly_limit=5
+    bugtracker_url=http://bugs.centos.org/set_project.php?project_id=23&amp;ref=http://bugs.centos.org/bug_report_page.php?category=yum
+    distroverpkg=centos-release
+    proxy=http://proxy-ams-1.cisco.com:8080
+  owner: root:root
+  permissions: '0644'
+- path: /etc/sysconfig/network-scripts/ifcfg-eth1
+  content: |
+    DEVICE=&quot;eth1&quot;
+    NM_CONTROLLED=&quot;no&quot;
+    ONBOOT=&quot;yes&quot;
+    BOOTPROTO=static
+    IPADDR=10.0.0.21
+    NETMASK=255.255.255.0
+  owner: root:root
+  permissions: '0644'
+- path: /etc/sysconfig/network-scripts/ifcfg-eth2
+  content: |
+    DEVICE=&quot;eth2&quot;
+    NM_CONTROLLED=&quot;no&quot;
+    ONBOOT=&quot;yes&quot;
+    BOOTPROTO=static
+    IPADDR=10.0.1.21
+    NETMASK=255.255.255.0
+  owner: root:root
+  permissions: '0644'</entry>
+        </extensions>
+        <interface id="0" name="eth1"/>
+        <interface id="1" name="eth2"/>
+        <interface id="2" name="eth3"/>
+    </node>
+    <node name="compute" type="SIMPLE" subtype="server" location="93,196" vmImage="server-centos">
+        <extensions>
+            <entry key="config" type="String">#cloud-config
+hostname: compute
+fqdn: compute.onm.ciscosystems.com.
+manage_etc_hosts: false
+package_upgrade: true
+
+runcmd:
+- ifconfig eth1 10.0.0.31 netmask 255.255.255.0 up
+- ifconfig eth2 10.0.1.31 netmask 255.255.255.0 up
+- ifconfig eth3 10.0.2.31 netmask 255.255.255.0 up
+- echo 10.0.0.21 network &gt; /etc/hosts
+- echo 10.0.0.11 controller &gt;&gt; /etc/hosts
+- echo 10.0.0.31 compute1 &gt;&gt; /etc/hosts
+- systemctl stop firewalld
+- systemctl disable firewalld 
+- dhclient -r eth0
+- dhclient
+- yum install -y http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
+- yum install -y http://rdo.fedorapeople.org/openstack-juno/rdo-release-juno.rpm
+- systemctl disable chronyd.service
+- systemctl enable ntpd.service
+- systemctl start ntpd.service
+
+packages:
+ - ntp
+ - yum-plugin-priorities
+
+
+write_files:
+- path: /etc/systemd/system/dhclient@.service
+  content: |
+    [Unit]
+    Description=Run dhclient on %i interface
+    After=network.target
+    [Service]
+    Type=oneshot
+    ExecStart=/sbin/dhclient %i -pf /var/run/dhclient.%i.pid -lf /var/lib/dhclient/dhclient.%i.lease
+    RemainAfterExit=yes
+  owner: root:root
+  permissions: '0644'
+- path: /etc/ntp.conf
+  content: |
+    driftfile /var/lib/ntp/drift
+    restrict default nomodify notrap nopeer noquery
+    restrict 127.0.0.1
+    restrict ::1
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    includefile /etc/ntp/crypto/pw
+    keys /etc/ntp/keys
+    disable monitor
+  owner: root:root
+  permissions: '0644'
+- path: /etc/yum.conf
+  content: |
+    [main]
+    cachedir=/var/cache/yum/$basearch/$releasever
+    keepcache=0
+    debuglevel=2
+    logfile=/var/log/yum.log
+    exactarch=1
+    obsoletes=1
+    gpgcheck=1
+    plugins=1
+    installonly_limit=5
+    bugtracker_url=http://bugs.centos.org/set_project.php?project_id=23&amp;ref=http://bugs.centos.org/bug_report_page.php?category=yum
+    distroverpkg=centos-release
+    proxy=http://proxy-ams-1.cisco.com:8080
+  owner: root:root
+  permissions: '0644'
+- path: /etc/sysconfig/network-scripts/ifcfg-eth1
+  content: |
+    DEVICE=&quot;eth1&quot;
+    NM_CONTROLLED=&quot;no&quot;
+    ONBOOT=&quot;yes&quot;
+    BOOTPROTO=static
+    IPADDR=10.0.0.31
+    NETMASK=255.255.255.0
+  owner: root:root
+  permissions: '0644'
+- path: /etc/sysconfig/network-scripts/ifcfg-eth2
+  content: |
+    DEVICE=&quot;eth2&quot;
+    NM_CONTROLLED=&quot;no&quot;
+    ONBOOT=&quot;yes&quot;
+    BOOTPROTO=static
+    IPADDR=10.0.1.31
+    NETMASK=255.255.255.0
+  owner: root:root
+  permissions: '0644'
+- path: /etc/sysconfig/network-scripts/ifcfg-eth2
+  content: |
+    DEVICE=&quot;eth2&quot;
+    NM_CONTROLLED=&quot;no&quot;
+    ONBOOT=&quot;yes&quot;
+    BOOTPROTO=static
+    IPADDR=10.0.2.31
+    NETMASK=255.255.255.0
+  owner: root:root
+  permissions: '0644'</entry>
+        </extensions>
+        <interface id="0" name="eth1"/>
+        <interface id="1" name="eth2"/>
+        <interface id="2" name="eth3"/>
+    </node>
+    <node name="containers" type="SIMPLE" subtype="server" location="447,275" vmImage="server-centos" vmFlavor="m1.medium">
+        <extensions>
+            <entry key="config" type="String">#cloud-config
+hostname: containers
+fqdn: containers.onm.ciscosystems.com.
+manage_etc_hosts: false
+package_upgrade: true
+
+runcmd:
+- ifconfig eth1 10.0.0.91 netmask 255.255.255.0 up
+- systemctl stop firewalld
+- systemctl disable firewalld 
+- setsebool -P nis_enabled 1
+- echo 10.0.0.21 network &gt; /etc/hosts
+- echo 10.0.0.11 controller &gt;&gt; /etc/hosts
+- echo 10.0.0.31 compute1 &gt;&gt; /etc/hosts
+- dhclient -r eth0
+- dhclient
+- yum install -y http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
+- yum install -y http://rdo.fedorapeople.org/openstack-juno/rdo-release-juno.rpm
+- systemctl disable chronyd.service
+- systemctl enable ntpd.service
+- systemctl start ntpd.service
+
+packages:
+ - ntp
+ - yum-plugin-priorities
+ - bind-utils
+ - wget
+
+write_files:
+- path: /etc/systemd/system/dhclient@.service
+  content: |
+    [Unit]
+    Description=Run dhclient on %i interface
+    After=network.target
+    [Service]
+    Type=oneshot
+    ExecStart=/sbin/dhclient %i -pf /var/run/dhclient.%i.pid -lf /var/lib/dhclient/dhclient.%i.lease
+    RemainAfterExit=yes
+  owner: root:root
+  permissions: '0644'
+- path: /etc/ntp.conf
+  content: |
+    driftfile /var/lib/ntp/drift
+    restrict default nomodify notrap nopeer noquery
+    restrict 127.0.0.1
+    restrict ::1
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    server ntp.esl.cisco.com iburst
+    includefile /etc/ntp/crypto/pw
+    keys /etc/ntp/keys
+    disable monitor
+  owner: root:root
+  permissions: '0644'
+- path: /etc/yum.conf
+  content: |
+    [main]
+    cachedir=/var/cache/yum/$basearch/$releasever
+    keepcache=0
+    debuglevel=2
+    logfile=/var/log/yum.log
+    exactarch=1
+    obsoletes=1
+    gpgcheck=1
+    plugins=1
+    installonly_limit=5
+    bugtracker_url=http://bugs.centos.org/set_project.php?project_id=23&amp;ref=http://bugs.centos.org/bug_report_page.php?category=yum
+    distroverpkg=centos-release
+    proxy=http://proxy-ams-1.cisco.com:8080
+  owner: root:root
+  permissions: '0644'
+- path: /etc/sysconfig/network-scripts/ifcfg-eth1
+  content: |
+    DEVICE=&quot;eth1&quot;
+    NM_CONTROLLED=&quot;no&quot;
+    ONBOOT=&quot;yes&quot;
+    BOOTPROTO=static
+    IPADDR=10.0.0.91
+    NETMASK=255.255.255.0
+  owner: root:root
+  permissions: '0644'</entry>
+        </extensions>
+        <interface id="0" name="eth1"/>
+    </node>
+    <connection dst="/virl:topology/virl:node[2]/virl:interface[1]" src="/virl:topology/virl:node[1]/virl:interface[1]"/>
+    <connection dst="/virl:topology/virl:node[2]/virl:interface[2]" src="/virl:topology/virl:node[3]/virl:interface[1]"/>
+    <connection dst="/virl:topology/virl:node[2]/virl:interface[3]" src="/virl:topology/virl:node[3]/virl:interface[2]"/>
+    <connection dst="/virl:topology/virl:node[2]/virl:interface[4]" src="/virl:topology/virl:node[3]/virl:interface[3]"/>
+    <connection dst="/virl:topology/virl:node[2]/virl:interface[5]" src="/virl:topology/virl:node[4]/virl:interface[1]"/>
+    <connection dst="/virl:topology/virl:node[4]/virl:interface[2]" src="/virl:topology/virl:node[2]/virl:interface[6]"/>
+    <connection dst="/virl:topology/virl:node[2]/virl:interface[7]" src="/virl:topology/virl:node[4]/virl:interface[3]"/>
+    <connection dst="/virl:topology/virl:node[5]/virl:interface[1]" src="/virl:topology/virl:node[2]/virl:interface[8]"/>
+</topology>
